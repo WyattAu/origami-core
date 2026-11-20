@@ -25,11 +25,13 @@ updated: 2026-11-20  rev: 4
 | 17 | Complete rig plan + BOM, DO-NOT-ORDER gate | done | docs/P0-RIG.md (BOM 229-510 USD est.) | BLOCKED ON: operator approves plan |
 | 18 | Materials engine (core math + material-check CLI) | done | crates/origami-core/src/materials.rs; tests/materials.rs | ; |
 | 19 | REQ-O-007/008: gate mode refuses estimates | done | SPEC 5/5a; REQUIREMENTS; cli tests | ; |
-| 20 | Dogfood audit + fixes | done | .cargo fix 819e751; estate.yml 841231c; dependabot security on; contract OK; spec-audit PASS | watch main CI matrix |
+| 20 | Dogfood audit + fixes | done | .cargo fix 819e751; estate.yml 841231c; dependabot security on; contract OK; spec-audit PASS | ; |
+| 21 | CI triage + fixes (miri/deny/coverage/docs) | done | tokio 1.54.1 (RUSTSEC-2026-0386); coverage.sh --fail-under-lines + ADR-0005 exclusions; miri cfg-gate; Pages enabled | watch next CI run |
+| 22 | Coverage >= 90% gate | done | TOTAL 93.72% lines (local llvm-cov) | ; |
 | 12 | P0: measure 3 materials | blocked | bench hardware | BLOCKED ON: operator approves BOM in docs/P0-RIG.md |
 
 ## Next action
-Software: Slice 2 (bar-and-hinge folded-state simulation) per docs/plans/roadmap.md; commit+push this slice first. Hardware: nothing ordered until you approve docs/P0-RIG.md.
+Software: Slice 2 (bar-and-hinge folded-state simulation) per docs/plans/roadmap.md, after this CI run confirms green. Hardware: nothing ordered until you approve docs/P0-RIG.md.
 
 ## Policy: controlled designs (hard rule)
 Any origami model that is defense-related or finance-related goes to the
