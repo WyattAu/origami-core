@@ -1,7 +1,7 @@
 # origami-core
 
 status: active
-updated: 2026-11-20  rev: 3
+updated: 2026-11-20  rev: 4
 
 ## State
 | # | Task | Status | Evidence | Next |
@@ -21,9 +21,15 @@ updated: 2026-11-20  rev: 3
 | 13 | Domain code: fold model + gates + CLI | done | crates/origami-core/src/{fold,foldability}.rs; fold-check | ; |
 | 14 | docs gate (doc-lint tier k) | done | doc-lint: PASS tier k (em-dash sweep) | CI confirms on push |
 | 15 | Verify clippy + tests clean | done | clippy 0 issues; 17 passed / 0 failed | ; |
+| 16 | Full software roadmap (P1-P4, gated) | done | docs/plans/roadmap.md | ; |
+| 17 | Complete rig plan + BOM, DO-NOT-ORDER gate | done | docs/P0-RIG.md (BOM 229-510 USD est.) | BLOCKED ON: operator approves plan |
+| 18 | Materials engine (core math + material-check CLI) | done | crates/origami-core/src/materials.rs; tests/materials.rs | ; |
+| 19 | REQ-O-007/008: gate mode refuses estimates | done | SPEC 5/5a; REQUIREMENTS; cli tests | ; |
+| 20 | Dogfood audit + fixes | done | .cargo fix 819e751; estate.yml 841231c; dependabot security on; contract OK; spec-audit PASS | watch main CI matrix |
+| 12 | P0: measure 3 materials | blocked | bench hardware | BLOCKED ON: operator approves BOM in docs/P0-RIG.md |
 
 ## Next action
-P0: order the fold-test-rig hardware (load cell + linear actuator); task 12 unblocks on delivery.
+Software: Slice 2 (bar-and-hinge folded-state simulation) per docs/plans/roadmap.md; commit+push this slice first. Hardware: nothing ordered until you approve docs/P0-RIG.md.
 
 ## Policy: controlled designs (hard rule)
 Any origami model that is defense-related or finance-related goes to the
@@ -44,3 +50,7 @@ designs/README.md. When in doubt, place the design in the controlled repo.
 - 2026-11-20 rev 3: clippy + tests green (17/0), doc-lint PASS tier k,
   published to github.com/WyattAu/origami-core (shallow-clone push fixed
   via fetch --unshallow).
+- 2026-11-20 rev 4: materials engine slice (estimate-grade mechanics +
+  material-check --gate), roadmap written, rig plan completed + gated on
+  operator approval, dogfood fixes (.cargo absolute path, estate.yml
+  status vocab, dependabot security updates on).

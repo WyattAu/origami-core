@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 use origami_core::foldability::FoldabilityViolation;
 
 pub mod fold_json;
+pub mod materials_toml;
+
+pub use materials_toml::{MaterialEntry, MaterialLoadError};
 
 pub use fold_json::FoldLoadError;
 
@@ -127,6 +130,67 @@ pub fn describe_violation(violation: &FoldabilityViolation) -> String {
 #[must_use]
 pub fn all_pass(reports: &[FileReport]) -> bool {
     reports.iter().all(FileReport::is_pass)
+}
+
+/// Outcome payload for `material-check`.
+#[derive(Debug)]
+pub struct MaterialReport {
+    /// Human-readable report lines, in print order.
+    pub lines: Vec<String>,
+    /// True when gate mode accepts this entry (or gate mode is off).
+    pub gate_ok: bool,
+}
+
+/// Loads a materials entry and renders the estimate-grade mechanics
+/// report (bending rigidity, crease stiffness, facet buckling, radius
+/// verdict). In `gate` mode the report refuses estimate-grade entries
+/// (REQ-O-005/007).
+///
+/// # Errors
+///
+/// Returns a message when the entry cannot be loaded.
+pub fn run_material_check(
+    path: &Path,
+    crease_length_m: f64,
+    panel_width_m: f64,
+    k_factor: f64,
+    radius_ratio: Option<f64>,
+    gate: bool,
+) -> Result<MaterialReport, String> {
+    let entry = materials_toml::load_entry(path)
+        .map_err(|e| format!("cannot load {}: {e:?}", path.display()))?;
+    let model = entry.model;
+    let mut lines = Vec::new();
+    lines.push(format!("material: {} ({})", entry.id, entry.name));
+    lines.push(format!(
+        "provenance: {:?} ({})",
+        model.provenance, entry.provenance
+    ));
+    let d = model.bending_rigidity();
+    let k = model.crease_torsional_stiffness(crease_length_m, 1.0);
+    let sigma = model.plate_buckling_stress(panel_width_m, k_factor);
+    lines.push(format!("bending rigidity D = {d:.3e} N.m (estimate)"));
+    lines.push(format!(
+        "crease stiffness k = {k:.3e} N.m/rad at L = {crease_length_m} m (C = 1.0, estimate)"
+    ));
+    lines.push(format!(
+        "facet buckling sigma_cr = {sigma:.3e} Pa at b = {panel_width_m} m, k_factor = {k_factor}"
+    ));
+    match radius_ratio {
+        Some(r) => {
+            let verdict = model.radius_check(r);
+            lines.push(format!("radius verdict at r/t = {r}: {verdict:?}"));
+        }
+        None => lines.push("radius verdict: skipped (no --radius-rt given)".to_owned()),
+    }
+    let gate_ok = !gate || model.is_gate_eligible();
+    if gate && gate_ok {
+        lines.push("GATE: OK (measured)".to_owned());
+    }
+    if gate && !gate_ok {
+        lines.push("GATE: REFUSED (estimate entries are not gate-eligible: REQ-O-005)".to_owned());
+    }
+    Ok(MaterialReport { lines, gate_ok })
 }
 
 /// Example smoke check kept from the template pattern: assignment parsing.

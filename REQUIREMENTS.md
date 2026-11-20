@@ -37,6 +37,8 @@ requirement. Doc comments on the implementing item carry `REQ-NNN` tags.
 | REQ-O-004 | Every committed designs/**/*.fold passes REQ-O-001..003 on CI | MUST |
 | REQ-O-005 | Materials entries carry provenance; measured requires a rig run id | MUST |
 | REQ-O-006 | Every design meta.toml asserts civilian = true, controlled = false | MUST |
+| REQ-O-007 | material-check --gate refuses estimate entries, accepts measured | MUST |
+| REQ-O-008 | Mechanics: t^3 stiffness scaling; missing radius data = NoData, never pass | MUST |
 
 ## Domain traceability
 
@@ -48,3 +50,5 @@ requirement. Doc comments on the implementing item carry `REQ-NNN` tags.
 | REQ-O-004 | crates/origami-cli/tests/designs.rs + fold-check --all designs | integration |
 | REQ-O-005 | review gate; TOML schema validator lands with P0 rig data | review |
 | REQ-O-006 | review gate; agent contract AGENTS.md item 6 | review |
+| REQ-O-007 | crates/origami-cli/tests/materials.rs (gate refusal + DB parse) | unit |
+| REQ-O-008 | crates/origami-core/tests/materials.rs (scaling + verdicts) | unit |

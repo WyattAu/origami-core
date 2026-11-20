@@ -23,6 +23,26 @@ enum Command {
         #[arg(long)]
         all: bool,
     },
+    /// Mechanics report for a materials DB entry (estimate-grade).
+    MaterialCheck {
+        /// Path to a materials TOML entry.
+        path: PathBuf,
+        /// Crease length for the stiffness estimate, meters.
+        #[arg(long, default_value_t = 0.05)]
+        crease_length_m: f64,
+        /// Facet panel width for the buckling estimate, meters.
+        #[arg(long, default_value_t = 0.05)]
+        panel_width_m: f64,
+        /// Plate-strip buckling coefficient (4.0 = clamped strip).
+        #[arg(long, default_value_t = 4.0)]
+        k_factor: f64,
+        /// Run the dynamic radius gate at this r/t ratio.
+        #[arg(long)]
+        radius_rt: Option<f64>,
+        /// Gate mode: exit non-zero unless the entry is measured.
+        #[arg(long)]
+        gate: bool,
+    },
 }
 
 fn main() {
@@ -49,6 +69,34 @@ fn main() {
                 if origami_cli::all_pass(&reports) {
                     println!("{} file(s), all green", reports.len());
                 } else {
+                    std::process::exit(1);
+                }
+            }
+            Err(msg) => {
+                eprintln!("{msg}");
+                std::process::exit(1);
+            }
+        },
+        Command::MaterialCheck {
+            path,
+            crease_length_m,
+            panel_width_m,
+            k_factor,
+            radius_rt,
+            gate,
+        } => match origami_cli::run_material_check(
+            &path,
+            crease_length_m,
+            panel_width_m,
+            k_factor,
+            radius_rt,
+            gate,
+        ) {
+            Ok(report) => {
+                for line in &report.lines {
+                    println!("{line}");
+                }
+                if !report.gate_ok {
                     std::process::exit(1);
                 }
             }

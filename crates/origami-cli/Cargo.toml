@@ -10,6 +10,7 @@ repository.workspace = true
 
 [dependencies]
 serde_json.workspace = true
+toml.workspace = true
 origami-core.workspace = true
 clap.workspace = true
 

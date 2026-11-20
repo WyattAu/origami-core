@@ -74,6 +74,25 @@ id under `data/rig/`) or `estimate`.
   invalid; `estimate` entries never feed gate decisions.
   No-oracle: schema validator lands with the first measured data
   (P0 rig); until then this requirement is enforced by review.
+- REQ-O-007: `material-check --gate` refuses estimate-grade entries
+  (exit non-zero) and accepts measured ones; every DB entry parses with
+  non-empty provenance.
+  Oracle: `cargo test -p origami-cli --test materials` and
+  `cargo run -p origami-cli -- material-check data/materials/kapton-hn-125um.toml --gate`
+  (must exit non-zero while the entry is estimate-grade).
+
+## 5a. Mechanics estimates (REQ-O-008)
+
+`origami-core::materials` provides estimate-grade plate mechanics:
+bending rigidity `D = E t^3 / (12 (1 - nu^2))`, crease torsional
+stiffness `k = C D L` (calibration constant `C`, 1.0 default until the
+rig measures it), plate-strip buckling `sigma = k pi^2 D / (b^2 t)`,
+and dynamic radius verdicts where missing data is `NoData`, never a
+silent pass.
+
+- REQ-O-008: stiffness scales with `t^3`; the radius gate returns
+  `NoData` (not `Pass`) when the entry has no radius ratio.
+  Oracle: `cargo test -p origami-core --test materials`.
 
 ## 6. Placement policy (controlled designs)
 
