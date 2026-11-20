@@ -1,4 +1,4 @@
-# 0004 — Release flow: release-plz + vet + semver + attestation
+# 0004: Release flow: release-plz + vet + semver + attestation
 
 Date: 2026-10-04
 

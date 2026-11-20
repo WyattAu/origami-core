@@ -1,0 +1,17 @@
+# Materials entry: Kapton HN polyimide film, 125 um
+# status = "estimate": datasheet-typical values, no rig data yet (P0 rig pending)
+
+id = "kapton-hn-125um"
+name = "Kapton HN polyimide film, 125 um"
+class = "polyimide film"
+thickness_um = 125
+youngs_modulus_gpa = 2.5
+poisson_ratio = 0.34
+density_kg_m3 = 1430
+tensile_strength_mpa = 231
+temp_range_c = [-269, 400]
+min_fold_radius_over_thickness = 30
+crease_fatigue = "none: long dynamic life at large radii, unquantified"
+status = "estimate"
+provenance = "DuPont datasheet-typical values; no rig run"
+notes = "Standard space-deployable film. Dynamic radius guidance is the key unknown: rig runs R-002/R-003 replace min_fold_radius_over_thickness and crease_fatigue."

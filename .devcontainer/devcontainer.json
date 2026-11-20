@@ -1,6 +1,6 @@
 {
   // Image flavor: zero-setup. The nix flavor lives in .devcontainer/nix/.
-  "name": "OmniRust",
+  "name": "origami-core",
   "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}

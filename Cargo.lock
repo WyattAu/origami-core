@@ -660,35 +660,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omni-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "omni-core",
-]
-
-[[package]]
-name = "omni-core"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "loom",
- "proptest",
- "thiserror",
-]
-
-[[package]]
-name = "omni-service"
-version = "0.1.0"
-dependencies = [
- "axum",
- "omni-core",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -705,6 +676,35 @@ name = "oorandom"
 version = "11.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
+
+[[package]]
+name = "origami-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "origami-core",
+ "serde_json",
+]
+
+[[package]]
+name = "origami-core"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "loom",
+ "proptest",
+ "thiserror",
+]
+
+[[package]]
+name = "origami-service"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "percent-encoding"

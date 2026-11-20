@@ -1,4 +1,4 @@
-# 0003 — no_std policy for leaf crates
+# 0003: no_std policy for leaf crates
 
 Date: 2026-10-04
 

@@ -1,5 +1,5 @@
 [package]
-name = "omnirust-fuzz"
+name = "origami-core-fuzz"
 description = "cargo-fuzz harnesses for untrusted-input parsers (estate gate: fuzz on every parser)"
 version = "0.0.0"
 publish = false
@@ -11,8 +11,8 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 
-[dependencies.omni-core]
-path = "../crates/omni-core"
+[dependencies.origami-core]
+path = "../crates/origami-core"
 
 [[bin]]
 name = "parse_pub_id"

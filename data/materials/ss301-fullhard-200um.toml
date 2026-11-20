@@ -1,0 +1,16 @@
+# Materials entry: 301 stainless spring steel strip, 200 um, full hard
+# status = "estimate": datasheet-typical values, no rig data yet (P0 rig pending)
+
+id = "ss301-fullhard-200um"
+name = "301 stainless steel strip, 200 um, full hard"
+class = "spring metal"
+thickness_um = 200
+youngs_modulus_gpa = 193
+poisson_ratio = 0.3
+density_kg_m3 = 7800
+tensile_strength_mpa = 1400
+min_fold_radius_over_thickness = 5
+crease_fatigue = "none: high-cycle spring performance expected, unquantified"
+status = "estimate"
+provenance = "matweb-typical values; no rig run"
+notes = "Candidate for bistable crease hinges. Yield is the property that sets snap-through energy; measure via rig run R-004."

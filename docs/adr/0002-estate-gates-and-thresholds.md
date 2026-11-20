@@ -1,4 +1,4 @@
-# 0002 — Estate gates and thresholds
+# 0002: Estate gates and thresholds
 
 Date: 2026-10-04
 

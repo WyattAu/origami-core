@@ -42,7 +42,7 @@ jobs:
             echo "template-update: template repo (or no answers file) - nothing to update"
             exit 0
           fi
-          git config user.name "omni-template-bot"
+          git config user.name "origami-core-bot"
           git config user.email "wyatt_au@protonmail.com"
           copier update --defaults
           echo "changed=$(git status --porcelain | wc -l)" >> "$GITHUB_OUTPUT"

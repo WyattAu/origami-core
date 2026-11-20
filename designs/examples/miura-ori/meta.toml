@@ -1,0 +1,10 @@
+# Seed design: generated Miura-ori crease pattern
+name = "miura-ori-4x5"
+description = "Flat-foldable Miura tessellation, 4x5 cells, generated and gate-verified"
+license = "CC0-1.0"
+status = "verified-flat-foldable"
+material = "unassigned"
+generator = "designs/tools/make_miura.py"
+created = "2026-11-20"
+civilian = true
+controlled = false

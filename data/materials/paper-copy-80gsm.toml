@@ -1,0 +1,15 @@
+# Materials entry: copy paper, 80 gsm
+# status = "estimate": datasheet-typical values, no rig data yet (P0 rig pending)
+
+id = "paper-copy-80gsm"
+name = "Copy paper, 80 gsm"
+class = "cellulose paper"
+thickness_um = 100
+youngs_modulus_gpa = 2.0
+density_kg_m3 = 800
+anisotropy = "machine-direction vs cross-direction differs; unquantified"
+min_fold_radius_over_thickness = 1
+crease_fatigue = "none: fails in tens to hundreds of 180-deg cycles (anecdotal)"
+status = "estimate"
+provenance = "datasheet-typical values from general knowledge; no rig run"
+notes = "Anisotropy matters for fold line orientation. Replace after rig run R-001."

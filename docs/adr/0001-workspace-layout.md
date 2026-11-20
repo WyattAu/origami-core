@@ -1,4 +1,4 @@
-# 0001 — Cargo workspace layout (monorepo-first)
+# 0001: Cargo workspace layout (monorepo-first)
 
 Date: 2026-10-04
 
@@ -14,13 +14,13 @@ teach the shape, not just compile.
 
 ## Decision
 
-- `crates/omni-core` — L0 leaf: zero workspace deps, `no_std`-capable via
+- `crates/origami-core`; L0 leaf: zero workspace deps, `no_std`-capable via
   default-on `std` feature, REQ-tagged tests, criterion bench, fuzz target.
-- `crates/omni-service` — L3 composition: axum + tokio + tracing binary with
+- `crates/origami-service`; L3 composition: axum + tokio + tracing binary with
   health/readiness and graceful shutdown.
-- `crates/omni-cli` — clap binary composing on `omni-core`.
-- `xtask/` — workspace task runner; Makefile delegates to it.
-- `fuzz/` — cargo-fuzz harnesses (excluded from the workspace).
+- `crates/origami-cli`; clap binary composing on `origami-core`.
+- `xtask/`; workspace task runner; Makefile delegates to it.
+- `fuzz/`; cargo-fuzz harnesses (excluded from the workspace).
 - Lint policy lives once in `[workspace.lints]`; crates inherit via
   `[lints] workspace = true`.
 

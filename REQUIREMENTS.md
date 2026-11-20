@@ -1,4 +1,4 @@
-# Requirements — OmniRust-template
+# Requirements: origami-core
 
 Numbered, testable requirements. Every requirement maps to at least one named
 test/script check; every security-relevant check cites at least one
@@ -26,3 +26,25 @@ requirement. Doc comments on the implementing item carry `REQ-NNN` tags.
 |-------------|----------------------|----------------|
 | REQ-T-001 | `make ci` == `.github/workflows/ci.yml` step list | structural |
 | REQ-T-002 | devcontainer postCreate + `make ci` in CI devcontainer job | integration |
+
+## Domain requirements (origami)
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| REQ-O-001 | Structurally invalid FOLD files fail to load with a named error | MUST |
+| REQ-O-002 | Maekawa gate: \|M - V\| = 2 at every judged interior vertex | MUST |
+| REQ-O-003 | Kawasaki gate: alternating sector-angle identity within 1e-6 deg (std builds) | MUST |
+| REQ-O-004 | Every committed designs/**/*.fold passes REQ-O-001..003 on CI | MUST |
+| REQ-O-005 | Materials entries carry provenance; measured requires a rig run id | MUST |
+| REQ-O-006 | Every design meta.toml asserts civilian = true, controlled = false | MUST |
+
+## Domain traceability
+
+| Requirement | Check (script, test) | Property class |
+|-------------|----------------------|----------------|
+| REQ-O-001 | crates/origami-core/tests/fold.rs::structural_errors_surface_from_constructor | unit |
+| REQ-O-002 | crates/origami-core/tests/fold.rs::maekawa_only_failure_is_reported | unit |
+| REQ-O-003 | crates/origami-core/tests/fold.rs::kawasaki_only_failure_is_reported | unit |
+| REQ-O-004 | crates/origami-cli/tests/designs.rs + fold-check --all designs | integration |
+| REQ-O-005 | review gate; TOML schema validator lands with P0 rig data | review |
+| REQ-O-006 | review gate; agent contract AGENTS.md item 6 | review |

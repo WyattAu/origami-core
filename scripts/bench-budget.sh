@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 BASELINE=bench/baseline.tsv
 CURRENT=bench/current.tsv
-THRESHOLD_PCT="${OMNI_BENCH_THRESHOLD_PCT:-10}"
+THRESHOLD_PCT="${ORIGAMI_BENCH_THRESHOLD_PCT:-10}"
 UPDATE=()
 [ "${1:-}" = "--update" ] && UPDATE=(--update)
 mkdir -p bench

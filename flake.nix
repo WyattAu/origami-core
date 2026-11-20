@@ -1,5 +1,5 @@
 {
-  # OmniRust dev environment — nix owns system tools, rustup owns the Rust
+  # origami-core dev environment — nix owns system tools, rustup owns the Rust
   # toolchain (rust-toolchain.toml stays the pin everyone shares).
   description = "OmniRust-template development environment";
 

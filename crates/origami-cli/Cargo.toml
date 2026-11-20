@@ -1,0 +1,17 @@
+[package]
+name = "origami-cli"
+description = "FOLD validation and inspection CLI: structure + flat-foldability gates"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+origami-core.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,16 @@
+# Materials entry: PEEK film, 125 um
+# status = "estimate": datasheet-typical values, no rig data yet (P0 rig pending)
+
+id = "peek-film-125um"
+name = "PEEK film, 125 um"
+class = "high-performance polymer film"
+thickness_um = 125
+youngs_modulus_gpa = 3.6
+density_kg_m3 = 1300
+tensile_strength_mpa = 100
+temp_range_c = [-60, 260]
+min_fold_radius_over_thickness = 20
+crease_fatigue = "none: good flex life at large radii, unquantified"
+status = "estimate"
+provenance = "Victrex datasheet-typical values; no rig run"
+notes = "Reference material for folded skeletons (FOAM-style zig-zag spines). Rig run R-005."

@@ -1,6 +1,6 @@
-# Threat Model — OmniRust-template
+# Threat Model: origami-core
 
-Reference: STRIDE. Scope: the template as consumed by a derived project —
+Reference: STRIDE. Scope: the template as consumed by a derived project;
 files, scripts, and CI definitions a user inherits on "Use this template".
 Trust boundaries: (1) files executed by `make`/scripts on a developer host,
 (2) CI workflows executing with repo-scoped tokens, (3) the dependency and
@@ -35,3 +35,17 @@ action surface pinned in manifests.
 - Reusable workflows are consumed `@main` (estate standard); a compromised
   standards repo propagates. Mitigation: engineering-standards is
   single-owner + branch-protected.
+
+## Domain attack surface (added 2026-11-20)
+
+`origami-cli::fold_json` parses FOLD files from users and from the
+design library: treat as untrusted input.
+
+- serde_json is the decode boundary; the folded-model builder only
+  accepts the documented keys and returns typed errors on malformed
+  content (no panics; workspace lints deny the panic family).
+- Current exposure: local files, repo CI. No network path, no web
+  upload surface exists yet.
+- Before any upload surface ships: fuzz target for `fold_json`
+  (cargo-fuzz harness under `fuzz/`), input size caps at the service
+  layer, and a THREAT-MODEL review for the new surface.

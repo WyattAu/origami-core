@@ -4,15 +4,15 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug omni-cli",
-      "cargo": { "args": ["build", "--package=omni-cli", "--bin=omni-cli"] },
+      "name": "Debug origami-cli",
+      "cargo": { "args": ["build", "--package=origami-cli", "--bin=origami-cli"] },
       "args": ["hello-world"]
     },
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug omni-service",
-      "cargo": { "args": ["build", "--package=omni-service", "--bin=omni-service"] }
+      "name": "Debug origami-service",
+      "cargo": { "args": ["build", "--package=origami-service", "--bin=origami-service"] }
     }
   ]
 }
