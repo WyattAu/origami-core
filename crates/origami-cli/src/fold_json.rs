@@ -125,3 +125,117 @@ fn usize_value(cell: &Value) -> Option<usize> {
     let n = cell.as_u64()?;
     usize::try_from(n).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{build_pattern, FoldLoadError};
+    use origami_core::fold::StructureError;
+    use serde_json::json;
+
+    #[test]
+    fn missing_required_keys_are_named_errors() {
+        let no_vertices = json!({"edges_vertices": [[0, 1]]});
+        assert!(matches!(
+            build_pattern(&no_vertices),
+            Err(FoldLoadError::MissingOrBad("vertices_coords"))
+        ));
+        let no_edges = json!({"vertices_coords": [[0.0, 0.0], [1.0, 0.0]]});
+        assert!(matches!(
+            build_pattern(&no_edges),
+            Err(FoldLoadError::MissingOrBad("edges_vertices"))
+        ));
+    }
+
+    #[test]
+    fn wrong_row_shapes_are_named_errors() {
+        let base = |verts: serde_json::Value, edges: serde_json::Value| json!({"vertices_coords": verts, "edges_vertices": edges});
+        let short_vertex_row = base(json!([[0.0, 0.0], [1.0]]), json!([[0, 1]]));
+        assert!(matches!(
+            build_pattern(&short_vertex_row),
+            Err(FoldLoadError::MissingOrBad("vertices_coords"))
+        ));
+        let short_edge_row = base(json!([[0.0, 0.0], [1.0, 1.0]]), json!([[0]]));
+        assert!(matches!(
+            build_pattern(&short_edge_row),
+            Err(FoldLoadError::MissingOrBad("edges_vertices"))
+        ));
+        let non_number = base(json!([[0.0, 0.0], ["x", 1.0]]), json!([[0, 1]]));
+        assert!(matches!(
+            build_pattern(&non_number),
+            Err(FoldLoadError::MissingOrBad("vertices_coords"))
+        ));
+    }
+
+    #[test]
+    fn unknown_assignment_token_is_named_error() {
+        let v = json!({
+            "vertices_coords": [[0.0, 0.0], [1.0, 0.0]],
+            "edges_vertices": [[0, 1]],
+            "edges_assignments": ["X"]
+        });
+        assert!(matches!(
+            build_pattern(&v),
+            Err(FoldLoadError::BadAssignment(word)) if word == "X"
+        ));
+    }
+
+    #[test]
+    fn assignment_count_mismatch_is_structural() {
+        let v = json!({
+            "vertices_coords": [[0.0, 0.0], [1.0, 0.0]],
+            "edges_vertices": [[0, 1]],
+            "edges_assignments": ["M", "V"]
+        });
+        assert!(matches!(
+            build_pattern(&v),
+            Err(FoldLoadError::Structure(
+                StructureError::AssignmentCount { .. }
+            ))
+        ));
+    }
+
+    #[test]
+    fn minimal_valid_pattern_loads_with_faces() {
+        let v = json!({
+            "vertices_coords": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+            "edges_vertices": [[0, 1], [1, 2], [2, 3], [3, 0]],
+            "edges_assignments": ["B", "B", "B", "B"],
+            "faces_vertices": [[0, 1, 2, 3]]
+        });
+        let built = build_pattern(&v);
+        assert!(built.is_ok(), "minimal pattern must load: {built:?}");
+        let Ok(pattern) = built else {
+            unreachable!("minimal pattern load asserted")
+        };
+        assert_eq!(pattern.faces.len(), 1);
+        assert_eq!(pattern.assignments.len(), 4);
+    }
+
+    #[test]
+    fn malformed_face_rows_are_named_errors() {
+        // Non-numeric face cell: schema-level error.
+        let v = json!({
+            "vertices_coords": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]],
+            "edges_vertices": [[0, 1], [1, 2], [2, 0]],
+            "faces_vertices": [["x"]]
+        });
+        assert!(matches!(
+            build_pattern(&v),
+            Err(FoldLoadError::MissingOrBad("faces_vertices"))
+        ));
+        // Out-of-range face index: structural error.
+        let v2 = json!({
+            "vertices_coords": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]],
+            "edges_vertices": [[0, 1], [1, 2], [2, 0]],
+            "faces_vertices": [[0, 1, 9]]
+        });
+        assert!(matches!(
+            build_pattern(&v2),
+            Err(FoldLoadError::Structure(StructureError::BadFaceIndex {
+                face: 0,
+                vertex: 9,
+                vertex_count: 3
+            }))
+        ));
+    }
+}

@@ -89,8 +89,7 @@ fn write_entry(status: &str, tag: u128) -> PathBuf {
 fn gate_mode_accepts_measured_and_refuses_estimate() {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_nanos());
     let estimate = write_entry("estimate", now);
     let measured = write_entry("measured", now + 1);
     let refused = run_material_check(&estimate, 0.05, 0.05, 4.0, None, true);
@@ -111,8 +110,7 @@ fn gate_mode_accepts_measured_and_refuses_estimate() {
 fn bad_status_is_a_named_error() {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_nanos());
     let bad = write_entry("guesstimate", now + 2);
     let loaded = origami_cli::materials_toml::load_entry(&bad);
     assert!(

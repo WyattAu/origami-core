@@ -58,6 +58,15 @@ pub enum StructureError {
         /// Index of the offending edge.
         edge: usize,
     },
+    /// A face vertex index refers to a nonexistent vertex.
+    BadFaceIndex {
+        /// Index of the offending face.
+        face: usize,
+        /// The out-of-range vertex index.
+        vertex: usize,
+        /// Total vertex count.
+        vertex_count: usize,
+    },
 }
 
 /// A flat crease pattern: the FOLD data-model subset this crate models.
@@ -121,6 +130,17 @@ impl CreasePattern {
                     vertex,
                     vertex_count,
                 });
+            }
+        }
+        for (face_id, face) in self.faces.iter().enumerate() {
+            for vertex in face {
+                if *vertex >= vertex_count {
+                    return Err(StructureError::BadFaceIndex {
+                        face: face_id,
+                        vertex: *vertex,
+                        vertex_count,
+                    });
+                }
             }
         }
         Ok(())

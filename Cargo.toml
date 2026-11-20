@@ -16,7 +16,7 @@ repository = "https://github.com/WyattAu/origami-core"
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(miri)'] }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

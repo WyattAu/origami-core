@@ -91,6 +91,7 @@ fn str_field(value: &Value, key: &'static str) -> Result<String, MaterialLoadErr
 }
 
 /// Reads a numeric field that may be encoded as float or integer.
+#[allow(clippy::cast_precision_loss)] // TOML dimensioned integers fit f64 mantissa here
 fn num_value(cell: &Value) -> Option<f64> {
     cell.as_float()
         .or_else(|| cell.as_integer().map(|i| i as f64))

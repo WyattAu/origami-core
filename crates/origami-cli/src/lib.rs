@@ -196,12 +196,107 @@ pub fn run_material_check(
 /// Example smoke check kept from the template pattern: assignment parsing.
 #[cfg(test)]
 mod tests {
-    use super::{all_pass, check_file};
-    use std::path::Path;
+    use super::{all_pass, check_file, describe_violation, run_fold_check, run_material_check};
+    use origami_core::foldability::FoldabilityViolation;
+    use std::path::{Path, PathBuf};
+
+    fn kapton_entry() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/materials/kapton-hn-125um.toml")
+    }
 
     #[test]
+    fn describe_violation_renders_both_arms() {
+        let maekawa = FoldabilityViolation::Maekawa {
+            vertex: 3,
+            mountains: 2,
+            valleys: 2,
+        };
+        let kawasaki = FoldabilityViolation::Kawasaki {
+            vertex: 1,
+            error_deg: -20.0,
+        };
+        assert!(describe_violation(&maekawa).contains("Maekawa violated"));
+        assert!(describe_violation(&maekawa).contains("vertex 3"));
+        assert!(describe_violation(&kawasaki).contains("Kawasaki violated"));
+        assert!(describe_violation(&kawasaki).contains("-20.000"));
+    }
+
+    #[test]
+    #[cfg(not(miri))]
     fn missing_file_fails_cleanly() {
+        // Miri isolation forbids `open`: this filesystem-touching test is
+        // skipped under miri (the loader's error paths stay covered by
+        // design tests elsewhere).
         let report = check_file(Path::new("does/not/exist.fold"));
         assert!(!all_pass(std::slice::from_ref(&report)));
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn gate_report_refuses_estimate_and_omits_gate_line_without_gate() {
+        let path = kapton_entry();
+        let gated = run_material_check(&path, 0.05, 0.05, 4.0, Some(20.0), true);
+        let Ok(r) = gated else {
+            unreachable!("kapton entry must load")
+        };
+        assert!(!r.gate_ok, "estimate entry must refuse gate");
+        let joined = r.lines.join("\n");
+        assert!(joined.contains("GATE: REFUSED"), "lines: {joined}");
+        assert!(joined.contains("radius verdict at r/t = 20: Fail"));
+        assert!(joined.contains("bending rigidity"));
+
+        let ungated = run_material_check(&path, 0.05, 0.05, 4.0, None, false);
+        let Ok(r2) = ungated else {
+            unreachable!("kapton entry must load")
+        };
+        assert!(r2.gate_ok, "no gate mode: always ok");
+        let joined2 = r2.lines.join("\n");
+        assert!(!joined2.contains("GATE:"), "no gate line without --gate");
+        assert!(joined2.contains("radius verdict: skipped"));
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn run_fold_check_errors_on_missing_path() {
+        let err = run_fold_check(Path::new("no/such/dir"), true);
+        assert!(err.is_err(), "missing path must error");
+        let Err(msg) = err else {
+            unreachable!("error asserted")
+        };
+        assert!(msg.contains("cannot walk"), "{msg}");
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn empty_directory_yields_named_error() {
+        let dir = std::env::temp_dir().join(format!(
+            "origami-empty-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos())
+        ));
+        let created = std::fs::create_dir_all(&dir);
+        assert!(created.is_ok(), "temp dir create failed: {created:?}");
+        let err = run_fold_check(&dir, true);
+        assert!(err.is_err(), "empty dir must error");
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn load_error_message_cites_path() {
+        let err = run_material_check(
+            Path::new("no/such/entry.toml"),
+            0.05,
+            0.05,
+            4.0,
+            None,
+            false,
+        );
+        assert!(err.is_err(), "missing entry must error");
+        let Err(msg) = err else {
+            unreachable!("error asserted")
+        };
+        assert!(msg.contains("cannot load"), "{msg}");
     }
 }
