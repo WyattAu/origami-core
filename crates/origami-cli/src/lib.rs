@@ -132,8 +132,80 @@ pub fn all_pass(reports: &[FileReport]) -> bool {
     reports.iter().all(FileReport::is_pass)
 }
 
-/// Outcome payload for `material-check`.
+/// Outcome payload for `fold-sim`.
 #[derive(Debug)]
+pub struct SimOutput {
+    /// Human-readable report lines, in print order.
+    pub lines: Vec<String>,
+    /// True when the relaxation met both tolerances.
+    pub converged: bool,
+}
+
+/// Loads a FOLD file, runs the bar-and-hinge relaxation, and renders
+/// the report (text lines, or a single JSON payload).
+///
+/// # Errors
+///
+/// Returns a message when the file cannot be loaded.
+pub fn run_fold_sim(
+    path: &Path,
+    fold_percent: f64,
+    max_iterations: u32,
+    relax: f64,
+    step_cap: f64,
+    json: bool,
+) -> Result<SimOutput, String> {
+    let pattern =
+        fold_json::load_fold(path).map_err(|e| format!("cannot load {}: {e:?}", path.display()))?;
+    let report = origami_core::sim::simulate_fold(
+        &pattern,
+        &origami_core::sim::SimParams {
+            fold_percent,
+            max_iterations,
+            relax,
+            step_cap,
+            ..origami_core::sim::SimParams::default()
+        },
+    );
+    let max_z = report
+        .vertices
+        .iter()
+        .map(|p| p[2].abs())
+        .fold(0.0_f64, f64::max);
+    let lines = if json {
+        let payload = serde_json::json!({
+            "iterations": report.iterations,
+            "converged": report.converged,
+            "max_axial_strain": report.max_axial_strain,
+            "mean_angle_error_rad": report.mean_angle_error_rad,
+            "max_angle_error_rad": report.max_angle_error_rad,
+            "total_energy": report.total_energy,
+            "crease_angles": report.crease_angles,
+            "max_abs_z": max_z,
+            "vertices": report.vertices,
+        });
+        vec![payload.to_string()]
+    } else {
+        vec![
+            format!("iterations: {}", report.iterations),
+            format!("converged: {}", report.converged),
+            format!("max axial strain: {:.5}", report.max_axial_strain),
+            format!(
+                "angle error (mean/max): {:.4}/{:.4} rad",
+                report.mean_angle_error_rad, report.max_angle_error_rad
+            ),
+            format!("total energy: {:.6}", report.total_energy),
+            format!("crease_angles: {}", serde_json::json!(report.crease_angles)),
+            format!("max |z|: {max_z:.4}"),
+        ]
+    };
+    Ok(SimOutput {
+        lines,
+        converged: report.converged,
+    })
+}
+
+/// Outcome payload for `material-check`.#[derive(Debug)]
 pub struct MaterialReport {
     /// Human-readable report lines, in print order.
     pub lines: Vec<String>,

@@ -1,10 +1,11 @@
-//! FOLD validation CLI: structure + flat-foldability gates. Composes on
-//! `origami-core`; the logic lives in `lib.rs` so it stays testable.
+//! FOLD validation CLI: structure + flat-foldability gates, materials
+//! reports, and folded-state simulation. Composes on `origami-core`; the
+//! logic lives in `lib.rs` so it stays testable.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-/// Validates crease patterns in the design library and beyond.
+/// Validates crease patterns, materials entries, and folding behavior.
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
@@ -43,13 +44,33 @@ enum Command {
         #[arg(long)]
         gate: bool,
     },
+    /// Fold a crease pattern with the bar-and-hinge solver.
+    FoldSim {
+        /// Path to a .fold file.
+        path: PathBuf,
+        /// Fold depth in [-1, 1] (targets = sign * percent * pi).
+        #[arg(long, default_value_t = 0.5)]
+        fold_percent: f64,
+        /// Hard cap on integration steps.
+        #[arg(long, default_value_t = 3000)]
+        max_iterations: u32,
+        /// Per-projection relaxation factor (0 to 1].
+        #[arg(long, default_value_t = 0.9)]
+        relax: f64,
+        /// Per-vertex displacement cap per sweep, model units.
+        #[arg(long, default_value_t = 0.05)]
+        step_cap: f64,
+        /// Emit the final vertices and report as JSON.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
     let cli = Cli::parse();
-    match cli.command {
-        Command::FoldCheck { path, all } => match origami_cli::run_fold_check(&path, all) {
-            Ok(reports) => {
+    let outcome = match cli.command {
+        Command::FoldCheck { path, all } => {
+            origami_cli::run_fold_check(&path, all).map(|reports| {
                 for report in &reports {
                     match &report.outcome {
                         origami_cli::CheckOutcome::Pass => {
@@ -66,17 +87,10 @@ fn main() {
                         }
                     }
                 }
-                if origami_cli::all_pass(&reports) {
-                    println!("{} file(s), all green", reports.len());
-                } else {
-                    std::process::exit(1);
-                }
-            }
-            Err(msg) => {
-                eprintln!("{msg}");
-                std::process::exit(1);
-            }
-        },
+                println!("{} file(s), all green", reports.len());
+                origami_cli::all_pass(&reports)
+            })
+        }
         Command::MaterialCheck {
             path,
             crease_length_m,
@@ -84,26 +98,41 @@ fn main() {
             k_factor,
             radius_rt,
             gate,
-        } => match origami_cli::run_material_check(
+        } => origami_cli::run_material_check(
             &path,
             crease_length_m,
             panel_width_m,
             k_factor,
             radius_rt,
             gate,
-        ) {
-            Ok(report) => {
-                for line in &report.lines {
+        )
+        .map(|report| {
+            for line in &report.lines {
+                println!("{line}");
+            }
+            report.gate_ok
+        }),
+        Command::FoldSim {
+            path,
+            fold_percent,
+            max_iterations,
+            relax,
+            step_cap,
+            json,
+        } => origami_cli::run_fold_sim(&path, fold_percent, max_iterations, relax, step_cap, json)
+            .map(|out| {
+                for line in &out.lines {
                     println!("{line}");
                 }
-                if !report.gate_ok {
-                    std::process::exit(1);
-                }
-            }
-            Err(msg) => {
-                eprintln!("{msg}");
-                std::process::exit(1);
-            }
-        },
+                out.converged
+            }),
+    };
+    match outcome {
+        Ok(true) => {}
+        Ok(false) => std::process::exit(1),
+        Err(msg) => {
+            eprintln!("{msg}");
+            std::process::exit(1);
+        }
     }
 }

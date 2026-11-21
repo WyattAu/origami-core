@@ -11,4 +11,5 @@ extern crate alloc;
 pub mod fold;
 pub mod foldability;
 pub mod materials;
+pub mod sim;
 pub mod text;
