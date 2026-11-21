@@ -1,7 +1,7 @@
 # origami-core
 
 status: active
-updated: 2026-11-21  rev: 7
+updated: 2026-11-21  rev: 8
 
 ## State
 | # | Task | Status | Evidence | Next |
@@ -39,7 +39,7 @@ updated: 2026-11-21  rev: 7
 | 25 | Slice 2 v2: kinematic fold-rate targets (Tachi) | active | crates/origami-core/src/sim.rs | implement fold_rates + TargetMode |
 
 ## Next action
-Software: deep-fold convergence research (R-004: flat-linearization is necessary-only; needs facet-rate equations or damped LM with line search), then Slice 3 import/export. Hardware: operator procurement.
+Software: Slice 3 (SVG import, manufacturing DXF export, CalculiX path) per docs/plans/roadmap.md; deep-fold convergence continues as research (R-005 hypotheses). Hardware: operator procurement per approved plan.
 
 ## Policy: controlled designs (hard rule)
 Any origami model that is defense-related or finance-related goes to the
@@ -68,3 +68,4 @@ designs/README.md. When in doubt, place the design in the controlled repo.
 - 2026-11-21 rev 5: Slice 2 v1 (PBD solver, fold-sim CLI, sim tests); CI triage fixes; vet refresh; GN attempt rejected (R-002).
 - 2026-11-21 rev 6: operator approved rig plan (proceed all); task 25 + 28 started.
 - 2026-11-21 rev 7: rates targets + rig-check shipped (c8564db); R-004 recorded (flat-linearization necessary-only).
+- 2026-11-21 rev 8: Slice 2 v2 complete (LM hybrid opt-in, 51 tests, R-005 recorded, 748cfdf).
