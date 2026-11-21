@@ -1,7 +1,7 @@
 # origami-core
 
 status: active
-updated: 2026-11-21  rev: 5
+updated: 2026-11-21  rev: 6
 
 ## State
 | # | Task | Status | Evidence | Next |
@@ -33,10 +33,13 @@ updated: 2026-11-21  rev: 5
 | 25 | Slice 2 v2: kinematic fold-rate targets (Tachi) | pending | RESEARCH_LOG R-001 | replace label targets with rate solve |
 | 26 | Slice 2 GN alternative (damped LM + line search) | blocked | RESEARCH_LOG R-002 | BLOCKED ON: research design of damping schedule |
 | 22 | Coverage >= 90% gate | done | TOTAL 93.72% lines (local llvm-cov) | ; |
-| 12 | P0: measure 3 materials | blocked | bench hardware | BLOCKED ON: operator approves BOM in docs/P0-RIG.md |
+| 12 | P0: measure 3 materials | blocked | docs/P0-RIG.md APPROVED by operator 2026-11-21 | BLOCKED ON: physical procurement + assembly (operator) |
+| 27 | Rig plan approval recorded | done | docs/P0-RIG.md approval block | ; |
+| 28 | Rig data tooling: rig-check + index schema | pending | crates/origami-cli/src/rig.rs | implement (REQ-O-005 oracle) |
+| 25 | Slice 2 v2: kinematic fold-rate targets (Tachi) | active | crates/origami-core/src/sim.rs | implement fold_rates + TargetMode |
 
 ## Next action
-Software: Slice 2 v2 — replace label targets with kinematic fold-rate targets (task 25, RESEARCH_LOG R-001 has the analysis). Hardware: nothing ordered until you approve docs/P0-RIG.md.
+Software: implement task 25 (fold-rate targets) + task 28 (rig-check oracle), verify, ship.
 
 ## Policy: controlled designs (hard rule)
 Any origami model that is defense-related or finance-related goes to the
@@ -63,3 +66,4 @@ designs/README.md. When in doubt, place the design in the controlled repo.
   status vocab, dependabot security updates on).
 
 - 2026-11-21 rev 5: Slice 2 v1 (PBD solver, fold-sim CLI, sim tests); CI triage fixes; vet refresh; GN attempt rejected (R-002).
+- 2026-11-21 rev 6: operator approved rig plan (proceed all); task 25 + 28 started.

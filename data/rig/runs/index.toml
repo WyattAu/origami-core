@@ -1,0 +1,10 @@
+# Rig run index: one [[run]] block per measured specimen batch.
+# Schema (REQ-O-005, docs/P0-RIG.md section 5):
+#   id        = "R-001"              # run id, cited by materials entries
+#   material  = "paper-copy-80gsm"   # data/materials entry id
+#   csv       = "R-001.csv"          # raw force-displacement file next to this index
+#   radius_rt = 20.0                 # mandrel r/t for the batch
+#   specimens = 5
+#   date      = "2026-11-21"
+#   notes     = ""
+# Validation: cargo run -p origami-cli -- rig-check

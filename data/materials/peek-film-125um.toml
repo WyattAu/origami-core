@@ -14,3 +14,6 @@ crease_fatigue = "none: good flex life at large radii, unquantified"
 status = "estimate"
 provenance = "Victrex datasheet-typical values; no rig run"
 notes = "Reference material for folded skeletons (FOAM-style zig-zag spines). Rig run R-005."
+
+# Rig runs backing this entry (empty until P0 rig data lands)
+rig_runs = []

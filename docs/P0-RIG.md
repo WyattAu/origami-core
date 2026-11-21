@@ -100,8 +100,10 @@ restarting the design.
 
 ## 9. Approval block
 
-- [ ] Operator approves BOM + budget band
-- [ ] Operator picks suppliers / sources parts
+- [x] Operator approves BOM + budget band (2026-11-21, "proceed all")
+- [ ] Operator picks suppliers / sources parts (physical; pending)
 - [ ] Build + calibration, then tasks land per section 7
 
-Nothing in this section is executable until checked.
+The software-side deliverables of this plan (index schema, rig-check
+validator, CSV contract) are implemented and gated in-repo; hardware
+steps remain physical operator actions.

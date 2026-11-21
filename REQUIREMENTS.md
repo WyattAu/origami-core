@@ -39,6 +39,7 @@ requirement. Doc comments on the implementing item carry `REQ-NNN` tags.
 | REQ-O-006 | Every design meta.toml asserts civilian = true, controlled = false | MUST |
 | REQ-O-007 | material-check --gate refuses estimate entries, accepts measured | MUST |
 | REQ-O-008 | Mechanics: t^3 stiffness scaling; missing radius data = NoData, never pass | MUST |
+| REQ-O-009 | Rates target mode: kinematic sign derivation, deterministic, strain-bounded on the seed | MUST |
 
 ## Domain traceability
 
@@ -52,3 +53,4 @@ requirement. Doc comments on the implementing item carry `REQ-NNN` tags.
 | REQ-O-006 | review gate; agent contract AGENTS.md item 6 | review |
 | REQ-O-007 | crates/origami-cli/tests/materials.rs (gate refusal + DB parse) | unit |
 | REQ-O-008 | crates/origami-core/tests/materials.rs (scaling + verdicts) | unit |
+| REQ-O-009 | crates/origami-cli/tests/sim.rs (Miura rates characterization) | integration |

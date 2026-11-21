@@ -44,6 +44,15 @@ enum Command {
         #[arg(long)]
         gate: bool,
     },
+    /// Validate rig-run provenance for the materials DB.
+    RigCheck {
+        /// Materials DB directory.
+        #[arg(long, default_value = "data/materials")]
+        materials: PathBuf,
+        /// Rig run index file.
+        #[arg(long, default_value = "data/rig/runs/index.toml")]
+        index: PathBuf,
+    },
     /// Fold a crease pattern with the bar-and-hinge solver.
     FoldSim {
         /// Path to a .fold file.
@@ -112,6 +121,18 @@ fn main() {
             }
             report.gate_ok
         }),
+        Command::RigCheck { materials, index } => origami_cli::run_rig_check(&materials, &index)
+            .map(|violations| {
+                if violations.is_empty() {
+                    println!("rig provenance: clean");
+                    true
+                } else {
+                    for v in &violations {
+                        println!("VIOLATION {v}");
+                    }
+                    false
+                }
+            }),
         Command::FoldSim {
             path,
             fold_percent,

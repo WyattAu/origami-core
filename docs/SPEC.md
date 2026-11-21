@@ -70,10 +70,12 @@ One TOML file per material batch under `data/materials/`. Required keys:
 explicit units in key names. `status` is `measured` (requires a rig run
 id under `data/rig/`) or `estimate`.
 
-- REQ-O-005: an entry with `status = "measured"` and no rig run id is
-  invalid; `estimate` entries never feed gate decisions.
-  No-oracle: schema validator lands with the first measured data
-  (P0 rig); until then this requirement is enforced by review.
+- REQ-O-005: an entry with `status = "measured"` must list rig run ids
+  in `rig_runs`, and every cited id must exist in
+  `data/rig/runs/index.toml`; `estimate` entries never feed gate
+  decisions.
+  Oracle: `cargo run -p origami-cli -- rig-check` (exit non-zero on
+  violations) and `cargo test -p origami-cli --test rig`.
 - REQ-O-007: `material-check --gate` refuses estimate-grade entries
   (exit non-zero) and accepts measured ones; every DB entry parses with
   non-empty provenance.
@@ -93,6 +95,21 @@ silent pass.
 - REQ-O-008: stiffness scales with `t^3`; the radius gate returns
   `NoData` (not `Pass`) when the entry has no radius ratio.
   Oracle: `cargo test -p origami-core --test materials`.
+
+## 5b. Fold-rate targets (REQ-O-009)
+
+`TargetMode::Rates` (default) derives crease target signs from the
+rigid-folding fold-rate solve: opposite-equality constraints at every
+interior 4-valent vertex, null space picked as the direction closest to
+uniform folding. Fallback to label targets when the system is
+unconstrained (no interior vertices) or multi-DOF; fallback and mode
+are reported in `docs/RESEARCH_LOG.md` (R-001/R-004).
+
+- REQ-O-009: rates mode on the Miura seed produces a fold with max
+  axial strain under 2% at `step_cap` 0.001, 60000 sweeps, and is
+  deterministic across runs.
+  Oracle: `cargo test -p origami-cli --test sim
+  miura_rates_mode_partial_fold_is_stable_and_deterministic`.
 
 ## 6. Placement policy (controlled designs)
 

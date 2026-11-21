@@ -20,6 +20,8 @@ pub struct MaterialEntry {
     pub model: MaterialModel,
     /// Free-text provenance note (required by REQ-O-005).
     pub provenance: String,
+    /// Rig run ids backing a `measured` entry (REQ-O-005).
+    pub rig_runs: Vec<String>,
 }
 
 /// Failures while loading a materials entry.
@@ -66,6 +68,19 @@ fn build_entry(value: &Value) -> Result<MaterialEntry, MaterialLoadError> {
     let min_radius = value
         .get("min_fold_radius_over_thickness")
         .and_then(num_value);
+    let rig_runs = match value.get("rig_runs") {
+        Some(Value::Array(tokens)) => {
+            let mut parsed = Vec::with_capacity(tokens.len());
+            for token in tokens {
+                let Some(text) = token.as_str() else {
+                    return Err(MaterialLoadError::MissingOrBad("rig_runs"));
+                };
+                parsed.push(text.to_owned());
+            }
+            parsed
+        }
+        _ => Vec::new(),
+    };
     let model = MaterialModel {
         youngs_modulus_pa: modulus_gpa * 1.0e9,
         poisson_ratio: poisson,
@@ -78,6 +93,7 @@ fn build_entry(value: &Value) -> Result<MaterialEntry, MaterialLoadError> {
         name,
         model,
         provenance,
+        rig_runs,
     })
 }
 

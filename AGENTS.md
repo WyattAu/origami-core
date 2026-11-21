@@ -48,6 +48,8 @@ foldability gates, materials engine) plus the civilian design library.
   `cargo run -p origami-cli -- fold-check --all designs`
 - Mechanics report by hand:
   `cargo run -p origami-cli -- material-check data/materials/kapton-hn-125um.toml --gate`
+- Rig provenance check:
+  `cargo run -p origami-cli -- rig-check`
 - Regenerate the seed design: `python3 designs/tools/make_miura.py`
 
 ## Controlled-designs policy

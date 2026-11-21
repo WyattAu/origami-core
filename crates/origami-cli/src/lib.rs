@@ -11,6 +11,7 @@ use origami_core::foldability::FoldabilityViolation;
 
 pub mod fold_json;
 pub mod materials_toml;
+pub mod rig;
 
 pub use materials_toml::{MaterialEntry, MaterialLoadError};
 
@@ -130,6 +131,16 @@ pub fn describe_violation(violation: &FoldabilityViolation) -> String {
 #[must_use]
 pub fn all_pass(reports: &[FileReport]) -> bool {
     reports.iter().all(FileReport::is_pass)
+}
+
+/// Runs `rig-check`: validates the rig provenance chain. Returns
+/// violation lines (empty = clean).
+///
+/// # Errors
+///
+/// Returns a message when inputs cannot be loaded.
+pub fn run_rig_check(materials_dir: &Path, index_path: &Path) -> Result<Vec<String>, String> {
+    rig::validate_provenance(materials_dir, index_path)
 }
 
 /// Outcome payload for `fold-sim`.

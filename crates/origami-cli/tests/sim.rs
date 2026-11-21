@@ -6,7 +6,12 @@ use std::path::Path;
 
 #[test]
 #[cfg(not(miri))]
-fn miura_folds_out_of_plane_without_tearing() {
+fn miura_rates_mode_partial_fold_is_stable_and_deterministic() {
+    // Slice 2 v2 characterization (RESEARCH_LOG R-001/R-004): rates mode
+    // picks the uniform fold mode; the PBD projection keeps bars near
+    // rest while crease convergence at deep folds is still research
+    // territory. Gates: bounded strain, real out-of-plane motion,
+    // determinism.
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../designs/examples/miura-ori/miura.fold");
     let pattern = origami_cli::fold_json::load_fold(&path);
@@ -15,13 +20,14 @@ fn miura_folds_out_of_plane_without_tearing() {
     };
     let params = origami_core::sim::SimParams {
         fold_percent: 0.5,
-        max_iterations: 2000,
+        max_iterations: 60000,
+        step_cap: 0.001,
         ..origami_core::sim::SimParams::default()
     };
     let report = origami_core::sim::simulate_fold(&pattern, &params);
     assert!(
-        report.max_axial_strain < 0.05,
-        "Miura must fold without stretching: {}",
+        report.max_axial_strain < 0.02,
+        "bars must stay near rest: {}",
         report.max_axial_strain
     );
     let max_z = report
@@ -29,10 +35,7 @@ fn miura_folds_out_of_plane_without_tearing() {
         .iter()
         .map(|p| p[2].abs())
         .fold(0.0_f64, f64::max);
-    assert!(
-        max_z > 0.05,
-        "half-folded Miura must leave the plane: {max_z}"
-    );
+    assert!(max_z > 0.5, "must fold out of plane: {max_z}");
     let report2 = origami_core::sim::simulate_fold(&pattern, &params);
     assert_eq!(report.vertices, report2.vertices, "determinism");
 }

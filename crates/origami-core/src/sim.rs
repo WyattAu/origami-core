@@ -29,6 +29,24 @@ use crate::fold::{CreasePattern, EdgeAssignment};
 use alloc::vec::Vec;
 use core::f64::consts::PI;
 
+/// How crease target angles are derived.
+///
+/// Research context (`docs/RESEARCH_LOG.md` R-001): M/V labels encode
+/// flat-foldability and are NOT rigid-fold targets for patterns like
+/// Miura; the kinematic rate solve is the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TargetMode {
+    /// Derive target signs from the rigid-folding fold-rate solve
+    /// (Tachi-style opposite-equality). Falls back to label targets
+    /// when the rate system has no 1-D null space (e.g. patterns
+    /// without interior 4-valent vertices).
+    #[default]
+    Rates,
+    /// Raw M/V labels as target signs (legacy; folds only patterns
+    /// whose labels happen to match the dihedral convention).
+    Labels,
+}
+
 /// Solver parameters for [`simulate_fold`].
 #[derive(Debug, Clone)]
 pub struct SimParams {
@@ -49,6 +67,8 @@ pub struct SimParams {
     /// Fraction of the sweep budget over which crease targets ramp from
     /// 0 to full (load-stepping; 0 disables).
     pub ramp_fraction: f64,
+    /// Target derivation mode.
+    pub target_mode: TargetMode,
 }
 
 impl Default for SimParams {
@@ -61,6 +81,7 @@ impl Default for SimParams {
             angle_tol_rad: 0.03,
             strain_tol: 5.0e-3,
             ramp_fraction: 0.3,
+            target_mode: TargetMode::Rates,
         }
     }
 }
@@ -78,6 +99,9 @@ struct Spring {
     target_angle: f64,
     /// Relative torsion stiffness (axial stiffness is 1 for all bars).
     torsion_k: f64,
+    /// M/V label sign for driven creases; None for facet diagonals and
+    /// boundary edges.
+    label_sign: Option<f64>,
 }
 
 fn sub3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -148,7 +172,7 @@ fn third_tips(tris: &[[usize; 3]], u: usize, v: usize) -> Vec<usize> {
 }
 
 /// Builds the spring network from a flat crease pattern.
-fn build_springs(cp: &CreasePattern, fold_percent: f64) -> Vec<Spring> {
+fn build_springs(cp: &CreasePattern) -> Vec<Spring> {
     let mut tris: Vec<[usize; 3]> = Vec::new();
     for face in &cp.faces {
         tris.extend(fan_triangles(face));
@@ -188,13 +212,18 @@ fn build_springs(cp: &CreasePattern, fold_percent: f64) -> Vec<Spring> {
         let opposite = third_tips(&tris, a, b);
         let r = opposite.first().copied();
         let s = opposite.get(1).copied();
-        let (target_angle, torsion_k) = match assignment {
-            Some(EdgeAssignment::Mountain) => (fold_percent * PI, 0.2),
-            Some(EdgeAssignment::Valley) => (-fold_percent * PI, 0.2),
-            // Facet diagonals: stiff zero-angle springs keep facets flat.
-            None if r.is_some() && s.is_some() => (0.0, 5.0),
-            // Boundary / unassigned edges: bars only, free hinge.
-            _ => (0.0, 0.0),
+        let label_sign = match assignment {
+            Some(EdgeAssignment::Mountain) => Some(1.0),
+            Some(EdgeAssignment::Valley) => Some(-1.0),
+            _ => None,
+        };
+        // Facet diagonals: stiff zero-angle springs keep facets flat.
+        // Everything else starts neutral; targets land via
+        // `apply_targets` once the fold rates are known.
+        let torsion_k = if label_sign.is_none() && r.is_some() && s.is_some() {
+            5.0
+        } else {
+            0.0
         };
         springs.push(Spring {
             a,
@@ -202,8 +231,9 @@ fn build_springs(cp: &CreasePattern, fold_percent: f64) -> Vec<Spring> {
             r,
             s,
             rest_len,
-            target_angle,
+            target_angle: 0.0,
             torsion_k,
+            label_sign,
         });
     }
     springs
@@ -399,11 +429,351 @@ fn rotate_about_axis(p: [f64; 3], origin: [f64; 3], u: [f64; 3], angle: f64) -> 
     ]
 }
 
+/// Solves the dense linear system `a * y = b` by Gaussian elimination
+/// with partial pivoting. Returns None when singular.
+fn solve_linear(a: &mut [Vec<f64>], b: &mut [f64]) -> Option<Vec<f64>> {
+    let n = b.len();
+    for col in 0..n {
+        let mut pivot = col;
+        let mut best = 0.0f64;
+        for ri in col..n {
+            let v = a
+                .get(ri)
+                .and_then(|row| row.get(col))
+                .copied()
+                .unwrap_or(0.0)
+                .abs();
+            if v > best {
+                best = v;
+                pivot = ri;
+            }
+        }
+        if best < 1.0e-14 {
+            return None;
+        }
+        a.swap(col, pivot);
+        b.swap(col, pivot);
+        let pv = a
+            .get(col)
+            .and_then(|row| row.get(col))
+            .copied()
+            .unwrap_or(0.0);
+        if let Some(row) = a.get_mut(col) {
+            for cell in row.iter_mut() {
+                *cell /= pv;
+            }
+        }
+        if let Some(bcell) = b.get_mut(col) {
+            *bcell /= pv;
+        }
+        for ri in 0..n {
+            if ri == col {
+                continue;
+            }
+            let factor = a
+                .get(ri)
+                .and_then(|row| row.get(col))
+                .copied()
+                .unwrap_or(0.0);
+            if factor.abs() < 1.0e-15 {
+                continue;
+            }
+            let pivot_row = a.get(col).cloned().unwrap_or_default();
+            if let Some(row) = a.get_mut(ri) {
+                for (cell, prow) in row.iter_mut().zip(pivot_row.iter()) {
+                    *cell -= factor * prow;
+                }
+            }
+            let pv_b = b.get(col).copied().unwrap_or(0.0);
+            if let Some(bcell) = b.get_mut(ri) {
+                *bcell -= factor * pv_b;
+            }
+        }
+    }
+    Some(b.to_vec())
+}
+
+/// Kinematic fold rates for the pattern's driven creases (Tachi-style
+/// opposite-equality, Schenk & Guest: at a rigid-foldable 4-valent
+/// vertex, opposite creases carry equal fold rates). Returns
+/// `Some(rates)` (normalized to max magnitude 1, in driven-spring
+/// order) when the constraint system has a null-space direction
+/// closest to uniform folding; `None` when the pattern is
+/// unconstrained (no interior 4-valent vertices) or the label pattern
+/// has no compatible fold direction.
+#[must_use]
+pub fn fold_rates(cp: &CreasePattern) -> Option<Vec<f64>> {
+    let springs = build_springs(cp);
+    let driven: Vec<usize> = springs
+        .iter()
+        .enumerate()
+        .filter(|(_, sp)| sp.label_sign.is_some())
+        .map(|(i, _)| i)
+        .collect();
+    if driven.is_empty() {
+        return None;
+    }
+    let crease_of: Vec<(usize, usize)> = driven
+        .iter()
+        .filter_map(|&i| {
+            let sp = springs.get(i)?;
+            Some(edge_key(sp.a, sp.b))
+        })
+        .collect();
+    let rows = rate_constraint_rows(cp, &crease_of, nc_of(&springs, &driven))?;
+    let rates = null_space_uniform_direction(rows, nc_of(&springs, &driven))?;
+    // Permute rates back to driven-spring order is unnecessary: rows
+    // already reference driven indices directly.
+    Some(rates)
+}
+
+fn nc_of(springs: &[Spring], driven: &[usize]) -> usize {
+    let upper = driven.last().map_or(0, |&i| i + 1);
+    upper.min(springs.len()).max(driven.len())
+}
+
+/// Builds the opposite-equality constraint rows over driven creases.
+fn rate_constraint_rows(
+    cp: &CreasePattern,
+    crease_of: &[(usize, usize)],
+    nc: usize,
+) -> Option<Vec<Vec<f64>>> {
+    let mut adj: Vec<Vec<usize>> = alloc::vec![Vec::new(); cp.vertices.len()];
+    for (k, (u, v)) in crease_of.iter().enumerate() {
+        if let Some(slot) = adj.get_mut(*u) {
+            slot.push(k);
+        }
+        if let Some(slot) = adj.get_mut(*v) {
+            slot.push(k);
+        }
+    }
+
+    let mut rows: Vec<Vec<f64>> = Vec::new();
+    for (vi, inc) in adj.iter().enumerate() {
+        if inc.len() != 4 {
+            continue;
+        }
+        let base = cp.vertices.get(vi)?;
+        let mut with_angle: Vec<(f64, usize)> = Vec::new();
+        for &k in inc {
+            let (u, v) = crease_of.get(k)?;
+            let other = if *u == vi { *v } else { *u };
+            let p = cp.vertices.get(other)?;
+            with_angle.push(((p[1] - base[1]).atan2(p[0] - base[0]), k));
+        }
+        if with_angle.len() != 4 {
+            continue;
+        }
+        with_angle.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut r = alloc::vec![0.0; nc];
+        for (pos, (_, k)) in with_angle.iter().enumerate() {
+            let sign = if pos % 2 == 0 { 1.0 } else { -1.0 };
+            if let Some(cell) = r.get_mut(*k) {
+                *cell = sign;
+            }
+        }
+        rows.push(r);
+    }
+    if rows.is_empty() {
+        None
+    } else {
+        Some(rows)
+    }
+}
+
+/// Picks the null-space direction closest to uniform folding (all-ones
+/// projection, normalized). Vanishing projection: None.
+/// Gauss-Jordan-eliminates the constraint rows; returns the reduced
+/// rows and the pivot column list.
+fn reduce_rows(mut rows: Vec<Vec<f64>>, nc: usize) -> (Vec<Vec<f64>>, Vec<usize>) {
+    let nrows = rows.len();
+    let mut pivot_cols: Vec<usize> = Vec::new();
+    let mut r = 0usize;
+    for col in 0..nc {
+        let mut pivot = None;
+        let mut best = 0.0f64;
+        for ri in r..nrows {
+            let val = rows
+                .get(ri)
+                .and_then(|row| row.get(col))
+                .copied()
+                .unwrap_or(0.0)
+                .abs();
+            if val > best {
+                best = val;
+                pivot = Some(ri);
+            }
+        }
+        let Some(pi) = pivot else {
+            continue;
+        };
+        rows.swap(r, pi);
+        let pv = rows
+            .get(r)
+            .and_then(|row| row.get(col))
+            .copied()
+            .unwrap_or(0.0);
+        if pv.abs() < 1.0e-12 {
+            continue;
+        }
+        if let Some(row) = rows.get_mut(r) {
+            for cell in row.iter_mut() {
+                *cell /= pv;
+            }
+        }
+        for ri in 0..nrows {
+            if ri == r {
+                continue;
+            }
+            let factor = rows
+                .get(ri)
+                .and_then(|row| row.get(col))
+                .copied()
+                .unwrap_or(0.0);
+            if factor.abs() < 1.0e-15 {
+                continue;
+            }
+            let pivot_row = rows.get(r).cloned().unwrap_or_default();
+            if let Some(row) = rows.get_mut(ri) {
+                for (cell, pr) in row.iter_mut().zip(pivot_row.iter()) {
+                    *cell -= factor * pr;
+                }
+            }
+        }
+        pivot_cols.push(col);
+        r += 1;
+        if r == nrows {
+            break;
+        }
+    }
+    (rows, pivot_cols)
+}
+
+fn null_space_uniform_direction(rows: Vec<Vec<f64>>, nc: usize) -> Option<Vec<f64>> {
+    let (rows, pivot_cols) = reduce_rows(rows, nc);
+    let free: Vec<usize> = (0..nc).filter(|c| !pivot_cols.contains(c)).collect();
+    if free.is_empty() {
+        return None;
+    }
+
+    // Null-space basis: one unit vector per free column, pivot entries
+    // filled from the reduced rows.
+    let mut basis: Vec<Vec<f64>> = Vec::new();
+    for &f in &free {
+        let mut v = alloc::vec![0.0; nc];
+        if let Some(slot) = v.get_mut(f) {
+            *slot = 1.0;
+        }
+        for (ri, &p) in pivot_cols.iter().enumerate() {
+            let coef = rows
+                .get(ri)
+                .and_then(|row| row.get(f))
+                .copied()
+                .unwrap_or(0.0);
+            if let Some(slot) = v.get_mut(p) {
+                *slot = -coef;
+            }
+        }
+        basis.push(v);
+    }
+
+    // Fold mode = null-space projection of the all-ones vector.
+    let kdim = basis.len();
+    let mut gram: Vec<Vec<f64>> = alloc::vec![alloc::vec![0.0; kdim]; kdim];
+    let mut rhs: Vec<f64> = alloc::vec![0.0; kdim];
+    for bi in 0..kdim {
+        for bj in 0..kdim {
+            let mut acc = 0.0;
+            for c in 0..nc {
+                let pair = basis
+                    .get(bi)
+                    .and_then(|row| row.get(c))
+                    .zip(basis.get(bj).and_then(|row| row.get(c)));
+                if let Some((&a, &b)) = pair {
+                    acc += a * b;
+                }
+            }
+            if let Some(cell) = gram.get_mut(bi).and_then(|row| row.get_mut(bj)) {
+                *cell = acc;
+            }
+        }
+        let mut acc = 0.0;
+        for c in 0..nc {
+            if let Some(&a) = basis.get(bi).and_then(|row| row.get(c)) {
+                acc += a;
+            }
+        }
+        if let Some(cell) = rhs.get_mut(bi) {
+            *cell = acc;
+        }
+    }
+    let coeffs = solve_linear(&mut gram, &mut rhs)?;
+    let mut rates = alloc::vec![0.0; nc];
+    for (bi, &coeff) in coeffs.iter().enumerate() {
+        for (c, rate) in rates.iter_mut().enumerate() {
+            if let Some(&bv) = basis.get(bi).and_then(|row| row.get(c)) {
+                *rate += coeff * bv;
+            }
+        }
+    }
+    let norm = rates.iter().fold(0.0f64, |acc, v| acc.max(v.abs()));
+    if norm < 1.0e-9 {
+        return None;
+    }
+    for rate in &mut rates {
+        *rate /= norm;
+    }
+    Some(rates)
+}
+
+/// Applies crease targets per `mode`. Rates mode: sign of the solved
+/// rate times `fold_percent` times `pi`; zero-rate creases are passive
+/// (free hinges). Labels mode or rates fallback: label sign times
+/// `fold_percent` times `pi`.
+fn apply_targets(
+    springs: &mut [Spring],
+    mode: TargetMode,
+    rates: Option<&[f64]>,
+    fold_percent: f64,
+) {
+    for (i, sp) in springs.iter_mut().enumerate() {
+        let Some(sign) = sp.label_sign else {
+            continue;
+        };
+        let rate = if mode == TargetMode::Rates {
+            rates.and_then(|r| r.get(i).copied())
+        } else {
+            None
+        };
+        match rate {
+            Some(rate) if rate.abs() > 1.0e-9 => {
+                sp.target_angle = rate.signum() * fold_percent * PI;
+                sp.torsion_k = 0.2;
+            }
+            Some(_) => sp.torsion_k = 0.0,
+            None => {
+                sp.target_angle = sign * fold_percent * PI;
+                sp.torsion_k = 0.2;
+            }
+        }
+    }
+}
+
 /// Runs the folded-state relaxation: repeated constraint-projection
 /// sweeps until both tolerances hold (or the sweep cap hits).
 #[must_use]
 pub fn simulate_fold(cp: &CreasePattern, params: &SimParams) -> SimReport {
-    let springs = build_springs(cp, params.fold_percent);
+    let mut springs = build_springs(cp);
+    let rates = match params.target_mode {
+        TargetMode::Rates => fold_rates(cp),
+        TargetMode::Labels => None,
+    };
+    apply_targets(
+        &mut springs,
+        params.target_mode,
+        rates.as_deref(),
+        params.fold_percent,
+    );
     let mut x: Vec<[f64; 3]> = cp.vertices.iter().map(|p| [p[0], p[1], 0.0]).collect();
 
     let mut res = residuals(&x, &springs, 1.0);
