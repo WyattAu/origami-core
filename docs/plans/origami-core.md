@@ -1,7 +1,7 @@
 # origami-core
 
 status: active
-updated: 2026-11-20  rev: 4
+updated: 2026-11-21  rev: 5
 
 ## State
 | # | Task | Status | Evidence | Next |
@@ -26,12 +26,17 @@ updated: 2026-11-20  rev: 4
 | 18 | Materials engine (core math + material-check CLI) | done | crates/origami-core/src/materials.rs; tests/materials.rs | ; |
 | 19 | REQ-O-007/008: gate mode refuses estimates | done | SPEC 5/5a; REQUIREMENTS; cli tests | ; |
 | 20 | Dogfood audit + fixes | done | .cargo fix 819e751; estate.yml 841231c; dependabot security on; contract OK; spec-audit PASS | ; |
-| 21 | CI triage + fixes (miri/deny/coverage/docs) | done | tokio 1.54.1 (RUSTSEC-2026-0386); coverage.sh --fail-under-lines + ADR-0005 exclusions; miri cfg-gate; Pages enabled | watch next CI run |
+| 21 | CI triage + fixes (miri/deny/coverage/docs) | done | tokio 1.54.1 (RUSTSEC-2026-0386); coverage.sh --fail-under-lines + ADR-0005 exclusions; miri cfg-gate; Pages enabled | ; |
+| 22 | Coverage >= 90% gate | done | TOTAL 93.88% lines (local llvm-cov, rev 38d0b1f) | ; |
+| 23 | Slice 2 v1: PBD folded-state solver | done | crates/origami-core/src/sim.rs; 46 tests green; committed 38d0b1f | fold-rate-based targets = next |
+| 24 | Vet refresh for toml/tokio deps | done | supply-chain imports+exemptions; cargo vet clean | ; |
+| 25 | Slice 2 v2: kinematic fold-rate targets (Tachi) | pending | RESEARCH_LOG R-001 | replace label targets with rate solve |
+| 26 | Slice 2 GN alternative (damped LM + line search) | blocked | RESEARCH_LOG R-002 | BLOCKED ON: research design of damping schedule |
 | 22 | Coverage >= 90% gate | done | TOTAL 93.72% lines (local llvm-cov) | ; |
 | 12 | P0: measure 3 materials | blocked | bench hardware | BLOCKED ON: operator approves BOM in docs/P0-RIG.md |
 
 ## Next action
-Software: Slice 2 (bar-and-hinge folded-state simulation) per docs/plans/roadmap.md, after this CI run confirms green. Hardware: nothing ordered until you approve docs/P0-RIG.md.
+Software: Slice 2 v2 — replace label targets with kinematic fold-rate targets (task 25, RESEARCH_LOG R-001 has the analysis). Hardware: nothing ordered until you approve docs/P0-RIG.md.
 
 ## Policy: controlled designs (hard rule)
 Any origami model that is defense-related or finance-related goes to the
@@ -56,3 +61,5 @@ designs/README.md. When in doubt, place the design in the controlled repo.
   material-check --gate), roadmap written, rig plan completed + gated on
   operator approval, dogfood fixes (.cargo absolute path, estate.yml
   status vocab, dependabot security updates on).
+
+- 2026-11-21 rev 5: Slice 2 v1 (PBD solver, fold-sim CLI, sim tests); CI triage fixes; vet refresh; GN attempt rejected (R-002).
