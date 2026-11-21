@@ -69,6 +69,11 @@ pub struct SimParams {
     pub ramp_fraction: f64,
     /// Target derivation mode.
     pub target_mode: TargetMode,
+    /// Use the damped Gauss-Newton (LM) sweep with PBD escape. Default
+    /// off: the pure projection solver is stable everywhere measured;
+    /// LM converges faster where it works but oscillates on deep Miura
+    /// folds (`docs/RESEARCH_LOG.md` R-005).
+    pub use_lm: bool,
 }
 
 impl Default for SimParams {
@@ -82,6 +87,7 @@ impl Default for SimParams {
             strain_tol: 5.0e-3,
             ramp_fraction: 0.3,
             target_mode: TargetMode::Rates,
+            use_lm: false,
         }
     }
 }
@@ -103,6 +109,14 @@ struct Spring {
     /// boundary edges.
     label_sign: Option<f64>,
 }
+
+/// Relative axial stiffness of bars in the solver energy: bars must be
+/// far stiffer than crease torsions so the optimum keeps lengths (rigid
+/// folding) instead of trading stretch for fold accuracy.
+const BAR_STIFF: f64 = 100.0;
+
+/// Row scale for bar constraints in the Jacobian (sqrt of stiffness).
+const BAR_ROW_SCALE: f64 = 10.0;
 
 fn sub3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
@@ -284,7 +298,7 @@ fn energy(x: &[[f64; 3]], springs: &[Spring], ramp: f64) -> f64 {
         };
         let d = sub3(pa, pb);
         let l = len3(d);
-        e += 0.5 * (l - sp.rest_len) * (l - sp.rest_len);
+        e += 0.5 * BAR_STIFF * (l - sp.rest_len) * (l - sp.rest_len);
         if sp.torsion_k > 0.0 {
             let theta = dihedral_angle(x, sp);
             let err = theta - sp.target_angle * ramp;
@@ -332,6 +346,244 @@ fn residuals(x: &[[f64; 3]], springs: &[Spring], ramp: f64) -> Residuals {
         out.mean_angle_error /= f64::from(angle_count);
     }
     out
+}
+
+/// Dihedral angle at positions `x` with one coordinate displaced to
+/// `delta` (numeric-derivative probe; restores the vertex afterwards).
+fn dihedral_probe(
+    x: &mut [[f64; 3]],
+    sp: &Spring,
+    vi: usize,
+    c: u8,
+    base: [f64; 3],
+    delta: f64,
+) -> f64 {
+    let Some(slot) = x.get_mut(vi) else {
+        return 0.0;
+    };
+    *slot = match c {
+        0 => [delta, base[1], base[2]],
+        1 => [base[0], delta, base[2]],
+        _ => [base[0], base[1], delta],
+    };
+    let theta = dihedral_angle(x, sp);
+    if let Some(slot) = x.get_mut(vi) {
+        *slot = base;
+    }
+    theta
+}
+
+/// Solves the dense linear system `a * y = b` by Gaussian elimination
+/// with partial pivoting. Returns None when singular.
+fn solve_linear(a: &mut [Vec<f64>], b: &mut [f64]) -> Option<Vec<f64>> {
+    let n = b.len();
+    for col in 0..n {
+        let mut pivot = col;
+        let mut best = 0.0f64;
+        for ri in col..n {
+            let v = a
+                .get(ri)
+                .and_then(|row| row.get(col))
+                .copied()
+                .unwrap_or(0.0)
+                .abs();
+            if v > best {
+                best = v;
+                pivot = ri;
+            }
+        }
+        if best < 1.0e-14 {
+            return None;
+        }
+        a.swap(col, pivot);
+        b.swap(col, pivot);
+        let pv = a
+            .get(col)
+            .and_then(|row| row.get(col))
+            .copied()
+            .unwrap_or(0.0);
+        if let Some(row) = a.get_mut(col) {
+            for cell in row.iter_mut() {
+                *cell /= pv;
+            }
+        }
+        if let Some(bcell) = b.get_mut(col) {
+            *bcell /= pv;
+        }
+        for ri in 0..n {
+            if ri == col {
+                continue;
+            }
+            let factor = a
+                .get(ri)
+                .and_then(|row| row.get(col))
+                .copied()
+                .unwrap_or(0.0);
+            if factor.abs() < 1.0e-15 {
+                continue;
+            }
+            let pivot_row = a.get(col).cloned().unwrap_or_default();
+            if let Some(row) = a.get_mut(ri) {
+                for (cell, prow) in row.iter_mut().zip(pivot_row.iter()) {
+                    *cell -= factor * prow;
+                }
+            }
+            let pvb = b.get(col).copied().unwrap_or(0.0);
+            if let Some(bcell) = b.get_mut(ri) {
+                *bcell -= factor * pvb;
+            }
+        }
+    }
+    Some(b.to_vec())
+}
+
+/// One damped Gauss-Newton (Levenberg-Marquardt) sweep with energy
+/// acceptance: builds the constraint Jacobian (bars analytic, torsions
+/// numeric), solves `(J J^T + lambda I) y = -e`, applies `relax * J^T y`
+/// capped per vertex, and keeps the step only when total energy drops.
+/// Adapts `lambda` (Marquardt: damp toward identity). Returns true when
+/// a step was accepted.
+#[allow(clippy::too_many_lines)] // numeric Jacobian assembly is inherently long
+fn lm_sweep(
+    x: &mut [[f64; 3]],
+    springs: &[Spring],
+    ramp: f64,
+    relax: f64,
+    cap: f64,
+    lambda: &mut f64,
+) -> bool {
+    let n = x.len();
+    let n_c = springs.len();
+    let eps = 1.0e-6;
+    let mut err = alloc::vec![0.0; n_c];
+    let mut j: Vec<Vec<f64>> = alloc::vec![alloc::vec![0.0; 3 * n]; n_c];
+
+    for (k, sp) in springs.iter().enumerate() {
+        let Some(row) = j.get_mut(k) else {
+            continue;
+        };
+        let (Some(&pa), Some(&pb)) = (x.get(sp.a), x.get(sp.b)) else {
+            continue;
+        };
+        let d = sub3(pa, pb);
+        let l = len3(d);
+        if sp.torsion_k <= 0.0 {
+            if l < 1.0e-12 {
+                continue;
+            }
+            if let Some(e_slot) = err.get_mut(k) {
+                *e_slot = (l - sp.rest_len) * BAR_ROW_SCALE;
+            }
+            let u = [d[0] / l, d[1] / l, d[2] / l];
+            for (c, uc) in u.iter().enumerate() {
+                if let Some(cell) = row.get_mut(3 * sp.a + c) {
+                    *cell = -uc * BAR_ROW_SCALE;
+                }
+                if let Some(cell) = row.get_mut(3 * sp.b + c) {
+                    *cell = uc * BAR_ROW_SCALE;
+                }
+            }
+        } else {
+            let theta = dihedral_angle(x, sp);
+            if let Some(e_slot) = err.get_mut(k) {
+                *e_slot = (theta - sp.target_angle * ramp) * sp.torsion_k;
+            }
+            let verts = [Some(sp.a), Some(sp.b), sp.r, sp.s];
+            for vi_opt in &verts {
+                let Some(vi) = vi_opt else { continue };
+                let vi = *vi;
+                let Some(&p0) = x.get(vi) else {
+                    continue;
+                };
+                let probes = [(0u8, p0[0]), (1, p0[1]), (2, p0[2])];
+                for (c, delta0) in probes {
+                    let idx = 3 * vi + c as usize;
+                    let plus = dihedral_probe(x, sp, vi, c, p0, delta0 + eps);
+                    let minus = dihedral_probe(x, sp, vi, c, p0, delta0 - eps);
+                    if let Some(cell) = row.get_mut(idx) {
+                        *cell = (plus - minus) / (2.0 * eps);
+                    }
+                }
+            }
+        }
+    }
+
+    let e_base = energy(x, springs, ramp);
+    for _trial in 0..3 {
+        let mut a_mat: Vec<Vec<f64>> = alloc::vec![alloc::vec![0.0; n_c]; n_c];
+        for i in 0..n_c {
+            for k in 0..n_c {
+                let mut acc = 0.0;
+                for c in 0..(3 * n) {
+                    let pair = j
+                        .get(i)
+                        .and_then(|row| row.get(c))
+                        .zip(j.get(k).and_then(|row| row.get(c)))
+                        .map_or((0.0, 0.0), |(a, b)| (*a, *b));
+                    acc += pair.0 * pair.1;
+                }
+                if let Some(cell) = a_mat.get_mut(i).and_then(|row| row.get_mut(k)) {
+                    *cell = acc;
+                }
+            }
+            if let Some(cell) = a_mat.get_mut(i).and_then(|row| row.get_mut(i)) {
+                *cell += *lambda;
+            }
+        }
+        let mut rhs: Vec<f64> = err.iter().map(|e| -e * relax).collect();
+        let Some(y) = solve_linear(&mut a_mat, &mut rhs) else {
+            *lambda = (*lambda * 8.0).min(1.0e5);
+            continue;
+        };
+
+        // Candidate step: dx = relax * J^T y, capped per vertex.
+        let mut candidate: Vec<[f64; 3]> = x.to_vec();
+        for vi in 0..n {
+            let Some(&base) = x.get(vi) else {
+                continue;
+            };
+            let mut dx = [0.0f64; 3];
+            for (k, yk) in y.iter().enumerate() {
+                let Some(sp) = springs.get(k) else {
+                    continue;
+                };
+                let involves = sp.a == vi || sp.b == vi || sp.r == Some(vi) || sp.s == Some(vi);
+                if !involves {
+                    continue;
+                }
+                let g = [
+                    j.get(k).and_then(|row| row.get(3 * vi)).copied(),
+                    j.get(k).and_then(|row| row.get(3 * vi + 1)).copied(),
+                    j.get(k).and_then(|row| row.get(3 * vi + 2)).copied(),
+                ];
+                for (dc, gc) in dx.iter_mut().zip(g.iter()) {
+                    if let Some(gv) = gc {
+                        *dc += gv * yk;
+                    }
+                }
+            }
+            let m = len3(dx);
+            if m > cap {
+                let sc = cap / m;
+                dx = [dx[0] * sc, dx[1] * sc, dx[2] * sc];
+            }
+            if let Some(slot) = candidate.get_mut(vi) {
+                *slot = [
+                    base[0] + dx[0] * relax,
+                    base[1] + dx[1] * relax,
+                    base[2] + dx[2] * relax,
+                ];
+            }
+        }
+        let e_cand = energy(&candidate, springs, ramp);
+        if e_cand < e_base {
+            x.clone_from_slice(&candidate);
+            *lambda = (*lambda / 2.0).max(1.0e-6);
+            return true;
+        }
+        *lambda = (*lambda * 4.0).min(1.0e2);
+    }
+    false
 }
 
 /// One projection sweep: creep torsion springs toward their (ramped)
@@ -427,70 +679,6 @@ fn rotate_about_axis(p: [f64; 3], origin: [f64; 3], u: [f64; 3], angle: f64) -> 
         rel[1] * c + cross_u_rel[1] * s + u[1] * along + origin[1],
         rel[2] * c + cross_u_rel[2] * s + u[2] * along + origin[2],
     ]
-}
-
-/// Solves the dense linear system `a * y = b` by Gaussian elimination
-/// with partial pivoting. Returns None when singular.
-fn solve_linear(a: &mut [Vec<f64>], b: &mut [f64]) -> Option<Vec<f64>> {
-    let n = b.len();
-    for col in 0..n {
-        let mut pivot = col;
-        let mut best = 0.0f64;
-        for ri in col..n {
-            let v = a
-                .get(ri)
-                .and_then(|row| row.get(col))
-                .copied()
-                .unwrap_or(0.0)
-                .abs();
-            if v > best {
-                best = v;
-                pivot = ri;
-            }
-        }
-        if best < 1.0e-14 {
-            return None;
-        }
-        a.swap(col, pivot);
-        b.swap(col, pivot);
-        let pv = a
-            .get(col)
-            .and_then(|row| row.get(col))
-            .copied()
-            .unwrap_or(0.0);
-        if let Some(row) = a.get_mut(col) {
-            for cell in row.iter_mut() {
-                *cell /= pv;
-            }
-        }
-        if let Some(bcell) = b.get_mut(col) {
-            *bcell /= pv;
-        }
-        for ri in 0..n {
-            if ri == col {
-                continue;
-            }
-            let factor = a
-                .get(ri)
-                .and_then(|row| row.get(col))
-                .copied()
-                .unwrap_or(0.0);
-            if factor.abs() < 1.0e-15 {
-                continue;
-            }
-            let pivot_row = a.get(col).cloned().unwrap_or_default();
-            if let Some(row) = a.get_mut(ri) {
-                for (cell, prow) in row.iter_mut().zip(pivot_row.iter()) {
-                    *cell -= factor * prow;
-                }
-            }
-            let pv_b = b.get(col).copied().unwrap_or(0.0);
-            if let Some(bcell) = b.get_mut(ri) {
-                *bcell -= factor * pv_b;
-            }
-        }
-    }
-    Some(b.to_vec())
 }
 
 /// Kinematic fold rates for the pattern's driven creases (Tachi-style
@@ -779,6 +967,9 @@ pub fn simulate_fold(cp: &CreasePattern, params: &SimParams) -> SimReport {
     let mut res = residuals(&x, &springs, 1.0);
     let mut iterations = 0u32;
     let mut converged = false;
+    let mut lambda: f64 = 1.0e-3;
+    let mut lm_stalls = 0u32;
+    let trace = std::env::var("ORIGAMI_SIM_TRACE").is_ok();
 
     while iterations < params.max_iterations {
         if res.max_angle_error < params.angle_tol_rad && res.max_axial_strain < params.strain_tol {
@@ -792,7 +983,37 @@ pub fn simulate_fold(cp: &CreasePattern, params: &SimParams) -> SimReport {
             let budget = params.ramp_fraction * f64::from(params.max_iterations);
             (f64::from(iterations) / budget).min(1.0)
         };
-        project_sweeps(&mut x, &springs, ramp, params.relax, params.step_cap);
+        // During the ramp the objective moves every sweep: keep lambda
+        // near its base so steps stay meaningful (an exploded lambda
+        // freezes the solver permanently).
+        if params.use_lm && ramp < 1.0 {
+            lambda = lambda.min(1.0e-3_f64);
+        }
+        let accepted = lm_sweep(
+            &mut x,
+            &springs,
+            ramp,
+            params.relax,
+            params.step_cap,
+            &mut lambda,
+        );
+        if trace && iterations % 20 == 0 {
+            eprintln!(
+                "it={iterations:5} ramp={ramp:.3} accepted={accepted} stalls={lm_stalls} lambda={lambda:e} strain={:.5} angle_mean={:.4} energy={:.4}",
+                res.max_axial_strain, res.mean_angle_error, energy(&x, &springs, 1.0)
+            );
+        }
+        if accepted {
+            lm_stalls = 0;
+        } else {
+            lm_stalls += 1;
+            if lm_stalls >= 2 {
+                // LM stalled: escape with position-based projections,
+                // then retry the damped step.
+                project_sweeps(&mut x, &springs, ramp, params.relax, params.step_cap);
+                lm_stalls = 0;
+            }
+        }
         res = residuals(&x, &springs, 1.0);
     }
 

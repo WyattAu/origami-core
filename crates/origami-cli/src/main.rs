@@ -69,6 +69,10 @@ enum Command {
         /// Per-vertex displacement cap per sweep, model units.
         #[arg(long, default_value_t = 0.05)]
         step_cap: f64,
+        /// Use the damped Gauss-Newton (LM) sweep instead of pure
+        /// position-based projection.
+        #[arg(long)]
+        use_lm: bool,
         /// Emit the final vertices and report as JSON.
         #[arg(long)]
         json: bool,
@@ -139,14 +143,23 @@ fn main() {
             max_iterations,
             relax,
             step_cap,
+            use_lm,
             json,
-        } => origami_cli::run_fold_sim(&path, fold_percent, max_iterations, relax, step_cap, json)
-            .map(|out| {
-                for line in &out.lines {
-                    println!("{line}");
-                }
-                out.converged
-            }),
+        } => origami_cli::run_fold_sim(
+            &path,
+            fold_percent,
+            max_iterations,
+            relax,
+            step_cap,
+            use_lm,
+            json,
+        )
+        .map(|out| {
+            for line in &out.lines {
+                println!("{line}");
+            }
+            out.converged
+        }),
     };
     match outcome {
         Ok(true) => {}

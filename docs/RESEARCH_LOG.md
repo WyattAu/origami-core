@@ -51,3 +51,32 @@ monotonically with smaller caps (0.05: ~10%, 0.01: ~4%, 0.002: ~1.4%
 on the seed at fixed sweep budgets). `relax` 0.9 fine at small caps.
 Bars-last ordering matters for the reported residual (end state
 satisfies lengths).
+
+## R-005: LM stall on full-pattern folds (2026-11-21)
+
+Attempted: hybrid LM + PBD. Single-crease LM converges cleanly after
+two fixes: (1) consistent weighted least squares — error and Jacobian
+rows must carry the same sqrt(stiffness) factor (scaling only the error
+made the GN direction optimize a different objective than the
+acceptance test checked; stall at a bit-identical residual);
+(2) Marquardt per-row scaling — damping `lambda * diag_ii` instead of an
+absolute lambda, making the schedule scale-invariant (an absolute
+lambda that dwarfs the constraint scale freezes the solver: steps ~1e-10
+report a bit-identical residual forever).
+
+Remaining open: on the full 4x5 Miura at percent 0.5, LM still stalls
+(mean angle error ~0.87-1.06 rad, bars near rest) while pure PBD
+reaches 0.47% strain at cap 0.001 x 100k sweeps. Hypotheses for the
+next session, in order:
+1. line search over `relax` (step over-shoot on the curved energy);
+2. the ramp interacting with LM acceptance (objective moves between
+   sweeps, so monotone acceptance is the wrong criterion during ramp;
+   accept-always-during-ramp with post-ramp LM);
+3. constraint formulation: swap numeric dihedral gradients for analytic
+   ones, or reformulate torsion constraints as point-to-point rotations
+   of the tip pair (removes the huge-magnitude numeric rows).
+
+Status: LM kept behind `SimParams::use_lm` (default off, CLI
+`--use-lm`); pure PBD remains the default and is the measured-best
+configuration. Miura characterization test pins the current honest
+behavior: <2% strain at 60k sweeps, cap 0.001, deterministic.

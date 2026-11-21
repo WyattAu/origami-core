@@ -164,6 +164,7 @@ pub fn run_fold_sim(
     max_iterations: u32,
     relax: f64,
     step_cap: f64,
+    use_lm: bool,
     json: bool,
 ) -> Result<SimOutput, String> {
     let pattern =
@@ -175,6 +176,7 @@ pub fn run_fold_sim(
             max_iterations,
             relax,
             step_cap,
+            use_lm,
             ..origami_core::sim::SimParams::default()
         },
     );

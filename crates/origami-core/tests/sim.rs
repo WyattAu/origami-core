@@ -174,3 +174,112 @@ fn degenerate_edge_is_rejected_before_simulation() {
         Err(origami_core::fold::StructureError::DegenerateEdge { .. })
     ));
 }
+
+/// Three quads in a strip: two adjacent mountain creases sharing the
+/// middle facet. Under a consistent winding convention both creases
+/// fold the same sense and every facet stays flat.
+#[test]
+fn adjacent_same_label_creases_fold_consistently() {
+    // Strip of 3 quads: top row indices 0-3 (y=1), bottom 4-7 (y=0).
+    let vertices: Vec<[f64; 2]> = vec![
+        [0.0, 1.0],
+        [1.0, 1.0],
+        [2.0, 1.0],
+        [3.0, 1.0],
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [2.0, 0.0],
+        [3.0, 0.0],
+    ];
+    let edges = vec![
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+        [0, 4],
+        [3, 7],
+        [1, 5],
+        [2, 6],
+    ];
+    let assignments = vec![
+        Assignment::Boundary,
+        Assignment::Boundary,
+        Assignment::Boundary,
+        Assignment::Boundary,
+        Assignment::Boundary,
+        Assignment::Boundary,
+        Assignment::Boundary,
+        Assignment::Boundary,
+        Assignment::Mountain,
+        Assignment::Mountain,
+    ];
+    let faces = vec![vec![0, 4, 5, 1], vec![1, 5, 6, 2], vec![2, 6, 7, 3]];
+    let cp = CreasePattern::new(vertices, edges, assignments, faces);
+    assert!(cp.is_ok(), "strip fixture is structural: {cp:?}");
+    let Ok(cp) = cp else {
+        unreachable!("fixture asserted")
+    };
+    let report = simulate_fold(
+        &cp,
+        &SimParams {
+            fold_percent: 0.5,
+            max_iterations: 4000,
+            ..SimParams::default()
+        },
+    );
+    assert!(
+        report.max_axial_strain < 0.02,
+        "bars near rest: {}",
+        report.max_axial_strain
+    );
+    let creases: Vec<(f64, f64)> = report
+        .crease_angles
+        .iter()
+        .filter(|(_, t)| t.abs() > 1.0)
+        .copied()
+        .collect();
+    assert_eq!(creases.len(), 2, "two driven creases: {creases:?}");
+    let Some(&(a, _)) = creases.first() else {
+        unreachable!("length asserted")
+    };
+    let Some(&(b, _)) = creases.get(1) else {
+        unreachable!("length asserted")
+    };
+    assert!(
+        (a - b).abs() < 0.2,
+        "adjacent same-label creases must fold consistently: {a} vs {b}"
+    );
+    for &(achieved, target) in &report.crease_angles {
+        if target.abs() < 1.0e-9 {
+            assert!(achieved.abs() < 0.15, "facet must stay flat: {achieved}");
+        }
+    }
+}
+
+#[test]
+fn lm_mode_converges_on_a_single_crease() {
+    // Exercises the damped Gauss-Newton path (use_lm): the quad's lone
+    // crease must reach its target with bars at rest.
+    let cp = quad_cp(Assignment::Mountain);
+    let report = simulate_fold(
+        &cp,
+        &SimParams {
+            fold_percent: 0.5,
+            max_iterations: 300,
+            use_lm: true,
+            ..SimParams::default()
+        },
+    );
+    assert!(
+        report.max_axial_strain < 0.01,
+        "bars at rest: {}",
+        report.max_axial_strain
+    );
+    assert!(
+        report.max_angle_error_rad < 0.15,
+        "crease at target: {}",
+        report.max_angle_error_rad
+    );
+}
